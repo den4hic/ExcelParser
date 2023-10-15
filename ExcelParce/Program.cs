@@ -1,14 +1,14 @@
-﻿using OfficeOpenXml;
+﻿using Newtonsoft.Json;
+using OfficeOpenXml;
 using System;
 using System.Text;
+using System.Xml;
 
 class Program
 {
-    static void Main(string[] args)
+    public static Schedule schedule = new Schedule
     {
-        var schedule = new Schedule
-        {
-            Faculties = new Dictionary<string, Faculty>
+        Faculties = new Dictionary<string, Faculty>
             {
                 {"Факультет економічних наук", new Faculty
                     {
@@ -36,9 +36,35 @@ class Program
                             }
                         }
                     }
+                },
+                {"Факультет інформатики", new Faculty
+                    {
+                        Specializations = new Dictionary<string, Specialization>
+                        {
+                            {"Інженерія програмного забезпечення", new Specialization
+                                {
+
+                                }
+                            }
+                        }
+                    }
                 }
             }
-        };
+    };
+    static void Main(string[] args)
+    {
+
+        makeScheduleFen();
+        makeScheduleFi();
+
+        string json = JsonConvert.SerializeObject(schedule, (Newtonsoft.Json.Formatting)System.Xml.Formatting.Indented);
+
+        File.WriteAllText("../../../schedule.json", json);
+
+        Console.WriteLine(json);
+    }
+    static void makeScheduleFen()
+    {
         var daysOfWeek = new HashSet<string>() { "Понеділок", "Вівторок", "Середа", "Четвер", "П`ятниця", "Субота", "Неділя" };
         var timeSlots = new HashSet<string>() { "8.30-9.50", "10.00-11.20", "11.40-13.00", "13.30-14.50", "15.00-16.20", "16.30-17.50" };
         var specialization = new HashSet<string>();
@@ -59,71 +85,99 @@ class Program
             var flag = false;
             var time = "8.30-9.50";
 
-            for (var i = 0; i < count-4; i++)
+            for (var i = 0; i < count - 4; i++)
             {
                 if (daysOfWeek.Contains(b[i].Value.ToString()))
                 {
                     currentDay = b[i].Value.ToString();
                 }
-                if (flag || timeSlots.Contains(b[i].Value.ToString()) && !daysOfWeek.Contains(b[i+1].Value.ToString()) && !timeSlots.Contains(b[i+1].Value.ToString()))
+                if (flag || timeSlots.Contains(b[i].Value.ToString()) && !daysOfWeek.Contains(b[i + 1].Value.ToString()) && !timeSlots.Contains(b[i + 1].Value.ToString()))
                 {
+
                     if (!flag)
                     {
                         time = b[i].Value.ToString();
                     }
                     flag = false;
                     string subjectName = b[i + 1].Value.ToString();
+
                     //Console.WriteLine(subjectName + " " + currentDay);
                     if (subjectName.Contains('('))
                     {
-                        int c = subjectName.LastIndexOf('(');
-                        int d = subjectName.LastIndexOf(')');
-                        string specKey = subjectName.Substring(c + 1, d - c - 1);
-                        //Console.WriteLine(specKey);
-                        if (specKey.Contains("ек.") || specKey.Contains("екон.") || specKey.Contains("ек"))
+                        int firstParenthes = subjectName.LastIndexOf('(');
+                        int secondParenthes = subjectName.LastIndexOf(')');
+                        string specKey = subjectName.Substring(firstParenthes + 1, secondParenthes - firstParenthes - 1);
+                        //Console.WriteLine(subjectName.Substring(0, firstParenthes) + subjectName.Substring(secondParenthes + 1));                        
+
+                        if (specKey.Contains("ек.") || specKey.Contains("екон.") || specKey == "ек")
                         {
                             specialization.Add("Економіка");
                         }
-                        if (specKey.Contains("фін.") || specKey.Contains("фінанси")) 
+                        if (specKey.Contains("фін.") || specKey.Contains("фінанси"))
                         {
+
                             specialization.Add("Фінанси");
                         }
                         if (specKey.Contains("маркетинг") || specKey.Contains("марк.") || specKey.Contains("мар.") || specKey.Contains("марк,"))
                         {
                             specialization.Add("Маркетинг");
                         }
-                        if (specKey.Contains("мен.") || specKey.Contains("мен,") || specKey.Contains("марк,мен"))
+                        if (specKey.Contains("мен.") || specKey.Contains("мен,") || specKey.Contains("марк,мен") || specKey.Contains("менеджмент"))
                         {
                             specialization.Add("Менеджмент");
                         }
-                        if(specialization.Count == 0)
+                        string newName = subjectName;
+                        subjectName = subjectName.Substring(0, firstParenthes - 1) + "," + subjectName.Substring(secondParenthes + 1);
+                        if (specKey.Contains("економ."))
                         {
-                            Console.WriteLine(specKey);
+                            subjectName = newName;
+                            subjectName = subjectName.Replace(" пр", ", пр");
                             specialization.Add("Менеджмент");
                         }
+                        if (specialization.Count == 0)
+                        {
+                            subjectName = newName;
+                            subjectName = subjectName.Replace("(мар.)", "");
+                            subjectName = subjectName.Replace(" ст", ", ст");
+                            specialization.Add("Маркетинг");
+                        }
+
                     }
+                    else
+                    {
+                        subjectName = subjectName.Replace(" д", ", д");
+                        specialization.Add("Маркетинг");
+                        specialization.Add("Менеджмент");
+                        specialization.Add("Фінанси");
+                        specialization.Add("Економіка");
+                    }
+
+                    string? firstChar = b[i + 2].Value.ToString();
+
                     Group group = new Group()
                     {
-                        Name = b[i + 2].Value.ToString(),
+                        Name = b[i + 2].Value.ToString().Contains("лекція") ? "лекція" : firstChar[0].ToString(),
                         Classroom = b[i + 4].Value.ToString(),
                         Weeks = b[i + 3].Value.ToString(),
                         Time = time,
                         DayOfWeek = currentDay,
                     };
-                    //Console.WriteLine(b[i + 1].Value.ToString());
-                    
 
-                    if (schedule.Faculties["Факультет економічних наук"].Specializations["Економіка"].Subjects.Keys.Contains(subjectName))
+                    foreach (var item in specialization)
                     {
-                        schedule.Faculties["Факультет економічних наук"].Specializations["Економіка"].Subjects[subjectName].Groups.Add(group);
+                        if (schedule.Faculties["Факультет економічних наук"].Specializations[item].Subjects.Keys.Contains(subjectName))
+                        {
+                            schedule.Faculties["Факультет економічних наук"].Specializations[item].Subjects[subjectName].Groups.Add(group);
+                        }
+                        else
+                        {
+                            schedule.Faculties["Факультет економічних наук"].Specializations[item].Subjects.Add(subjectName, new Subject(group));
+                        }
                     }
-                    else
+
+                    if (i + 5 < count && !timeSlots.Contains(b[i + 5].Value.ToString()) && !daysOfWeek.Contains(b[i + 5].Value.ToString()) && !daysOfWeek.Contains(b[i + 4].Value.ToString()))
                     {
-                        schedule.Faculties["Факультет економічних наук"].Specializations["Економіка"].Subjects.Add(subjectName, new Subject(group));
-                    }
-                    
-                    if(i + 5 < count && !timeSlots.Contains(b[i + 5].Value.ToString()) && !daysOfWeek.Contains(b[i + 5].Value.ToString()) && !daysOfWeek.Contains(b[i + 4].Value.ToString())) {
-                        
+
                         i += 3;
                         flag = true;
                     }
@@ -131,43 +185,10 @@ class Program
                     specialization.Clear();
                 }
             }
-
-
-
         }
-
-        
-
-        /*
-         var date = DateTime.Now;
-        
-        makeTable();
-
-        Console.WriteLine((DateTime.Now - date).TotalSeconds);
-        Console.ReadKey();
-         
-        */
     }
-    static void makeTable()
+    static void makeScheduleFi()
     {
-        var schedule = new Schedule
-        {
-            Faculties = new Dictionary<string, Faculty>
-            {
-                {"Факультет інформатики", new Faculty
-                    {
-                        Specializations = new Dictionary<string, Specialization>
-                        {
-                            {"Інженерія програмного забезпечення", new Specialization
-                                {
-
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        };
 
         var daysOfWeek = new HashSet<string>() { "Понеділок", "Вівторок", "Середа", "Четвер", "П`ятниця", "Субота", "Неділя" };
 
