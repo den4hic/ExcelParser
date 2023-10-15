@@ -60,8 +60,6 @@ class Program
         string json = JsonConvert.SerializeObject(schedule, (Newtonsoft.Json.Formatting)System.Xml.Formatting.Indented);
 
         File.WriteAllText("../../../schedule.json", json);
-
-        Console.WriteLine(json);
     }
     static void makeScheduleFen()
     {
